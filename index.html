@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0c0a0a">
+<title>Reverse</title>
+<style>
+  :root {
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", sans-serif;
+    --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+    --bg: #0c0a0a;
+    --fg: #f29a9a;
+    --muted: #b26868;
+    --subtle: #774545;
+    --wash: #2a1515;
+    --field: #141010;
+    --border: color-mix(in oklab, var(--fg) 22%, transparent);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--bg);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100svh;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    letter-spacing: -0.01em;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  ::selection { background: var(--fg); color: var(--bg); }
+
+  main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    width: 100%;
+    max-width: 30rem;
+    margin: 0 auto;
+    padding: 2rem 1.25rem;
+  }
+  @media (min-width: 640px) { main { padding: 3rem 2rem; } }
+
+  h1 {
+    margin: 0 0 1.75rem;
+    font-family: var(--display);
+    font-size: 1.5rem;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: -0.025em;
+  }
+  @media (min-width: 640px) { h1 { font-size: 1.875rem; } }
+
+  .row-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0 0.125rem;
+  }
+
+  .label {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .count {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--subtle);
+  }
+
+  .field {
+    border: 1px solid var(--border);
+    border-radius: 0.375rem;
+    background: var(--field);
+    padding: 0.5rem 0.75rem;
+  }
+
+  .big {
+    font-family: var(--display);
+    font-size: 1.375rem;
+    line-height: 1.4;
+    letter-spacing: -0.015em;
+    color: var(--fg);
+  }
+  @media (min-width: 640px) { .big { font-size: 1.625rem; } }
+
+  #source {
+    display: block;
+    width: 100%;
+    min-height: 7.5rem;
+    resize: none;
+    appearance: none;
+    border: 0;
+    outline: none;
+    background: transparent;
+    caret-color: var(--fg);
+    unicode-bidi: plaintext;
+    direction: ltr;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+  }
+  #source::placeholder { color: var(--subtle); }
+
+  section { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .controls {
+    margin-top: 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.25rem;
+  }
+  .toggles { display: flex; align-items: flex-end; gap: 1.75rem; }
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem; }
+
+  .toggle {
+    min-height: 38px;
+    min-width: 44px;
+    padding: 0 0.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 0.125rem;
+    background: none;
+    border: 0;
+    font: inherit;
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.35;
+    transition: opacity 150ms ease-out;
+  }
+  .toggle:hover { opacity: 0.7; }
+  .toggle[aria-checked="true"] { opacity: 1; }
+  .toggle .name {
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .toggle .code {
+    font-family: var(--mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .btn {
+    min-height: 38px;
+    padding: 0 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    appearance: none;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    white-space: nowrap;
+    font-family: var(--sans);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.025em;
+    color: var(--muted);
+    cursor: pointer;
+    transition: opacity 150ms ease-out, color 150ms ease-out;
+  }
+  .btn:hover { color: var(--fg); }
+  .btn.primary { color: var(--fg); }
+  .btn.primary:hover { opacity: 0.7; }
+  .btn:disabled { opacity: 0.4; pointer-events: none; cursor: default; }
+
+  .toggle:focus-visible,
+  .btn:focus-visible {
+    outline: 2px solid var(--fg);
+    outline-offset: 2px;
+  }
+
+  #results { display: none; }
+  #results.show { display: block; }
+
+  #out-section { margin-top: 2rem; }
+
+  #output {
+    min-height: 8.5rem;
+    overflow: hidden;
+    unicode-bidi: isolate;
+    direction: ltr;
+  }
+  #output p {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  #points-section { margin-top: 2rem; unicode-bidi: isolate; direction: ltr; }
+  #points-section .label { margin-bottom: 0.75rem; }
+
+  #points {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 0.5rem;
+  }
+
+  .token {
+    min-height: 34px;
+    min-width: 2rem;
+    padding: 0.3rem 0.3rem;
+    border-radius: 0.25rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: var(--muted);
+    unicode-bidi: isolate;
+  }
+  .token.mark { background: var(--wash); color: var(--fg); }
+  .token .hex {
+    font-family: var(--mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.025em;
+  }
+  .token .glyph {
+    margin-top: 0.25rem;
+    line-height: 1;
+    font-family: var(--display);
+    font-size: 0.95rem;
+    white-space: pre;
+  }
+  .token.mark .glyph {
+    font-family: var(--sans);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<main dir="ltr">
+  <h1>reverse</h1>
+
+  <section>
+    <div class="row-head">
+      <label class="label" for="source">in</label>
+      <span class="count" id="in-count">0 chars</span>
+    </div>
+    <div class="field">
+      <textarea id="source" class="big" rows="4" dir="ltr" spellcheck="false"
+                placeholder="type…" autocomplete="off" autocapitalize="off"></textarea>
+    </div>
+  </section>
+
+  <div class="controls">
+    <div class="toggles">
+      <button type="button" class="toggle" id="toggle-rlo" role="switch" aria-checked="true" aria-label="RLO U+202E">
+        <span class="name">RLO</span><span class="code">U+202E</span>
+      </button>
+      <button type="button" class="toggle" id="toggle-zwj" role="switch" aria-checked="true" aria-label="ZWJ U+200D">
+        <span class="name">ZWJ</span><span class="code">U+200D</span>
+      </button>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="clear" disabled>clear</button>
+      <button type="button" class="btn primary" id="copy" disabled>copy</button>
+    </div>
+  </div>
+  <span class="sr-only" id="status" role="status" aria-live="polite"></span>
+
+  <div id="results">
+    <section id="out-section">
+      <div class="row-head">
+        <p class="label">out</p>
+        <span class="count" id="out-count">0 points</span>
+      </div>
+      <div id="output" class="field big" dir="ltr"><p id="output-text"></p></div>
+    </section>
+
+    <section id="points-section" dir="ltr">
+      <p class="label">points</p>
+      <div id="points"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var RLO = "\u202e";
+  var ZWJ = "\u200d";
+  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "200D": "ZERO WIDTH JOINER" };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var source = $("source");
+  var inCount = $("in-count");
+  var outCount = $("out-count");
+  var results = $("results");
+  var outputText = $("output-text");
+  var pointsEl = $("points");
+  var clearBtn = $("clear");
+  var copyBtn = $("copy");
+  var statusEl = $("status");
+  var toggleRlo = $("toggle-rlo");
+  var toggleZwj = $("toggle-zwj");
+
+  var state = { rlo: true, zwj: true, output: "" };
+
+  /* ---------- text transforms ---------- */
+
+  function reverseText(value) {
+    if (typeof Intl !== "undefined" && Intl.Segmenter) {
+      var seg = new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(value);
+      return Array.from(seg, function (p) { return p.segment; }).reverse().join("");
+    }
+    return Array.from(value).reverse().join("");
+  }
+
+  function markText(value, opts) {
+    if (!value) return "";
+    var out = value;
+    if (opts.zwj) {
+      out = out.replace(/([A-Za-z])(?= )/g, "$1" + ZWJ);
+      out = out.replace(/ /g, ZWJ + " ");
+    }
+    if (opts.rlo) out = RLO + out;
+    return out;
+  }
+
+  function toCodePoint(ch) {
+    var code = ch.codePointAt(0) || 0;
+    var hex = code.toString(16).toUpperCase();
+    while (hex.length < 4) hex = "0" + hex;
+    if (hex === "202E") return { char: ch, hex: hex, label: "RLO", name: NAMES[hex], kind: "rlo" };
+    if (hex === "200D") return { char: ch, hex: hex, label: "ZWJ", name: NAMES[hex], kind: "zwj" };
+    return { char: ch, hex: hex, label: ch, name: "VISIBLE", kind: "visible" };
+  }
+
+  function countLabel(n, unit) {
+    return n + " " + unit + (n === 1 ? "" : "s");
+  }
+
+  /* ---------- rendering ---------- */
+
+  function resizeTextarea() {
+    source.style.height = "auto";
+    source.style.height = Math.max(source.scrollHeight, 120) + "px";
+  }
+
+  function render() {
+    var value = source.value;
+    var reversed = reverseText(value);
+    var output = markText(reversed, { rlo: state.rlo, zwj: state.zwj });
+    state.output = output;
+
+    var points = Array.from(output).map(toCodePoint);
+
+    inCount.textContent = countLabel(Array.from(value).length, "char");
+    outCount.textContent = countLabel(points.length, "point");
+
+    clearBtn.disabled = value.length === 0;
+    copyBtn.disabled = output.length === 0;
+
+    if (!output) {
+      results.classList.remove("show");
+      outputText.textContent = "";
+      pointsEl.textContent = "";
+    } else {
+      results.classList.add("show");
+      outputText.textContent = output;
+
+      var frag = document.createDocumentFragment();
+      points.forEach(function (pt, index) {
+        var isMark = pt.kind !== "visible";
+        var tok = document.createElement("div");
+        tok.className = "token" + (isMark ? " mark" : "");
+        tok.title = pt.name + " \u00b7 index " + index;
+
+        var hex = document.createElement("span");
+        hex.className = "hex";
+        hex.textContent = "U+" + pt.hex;
+
+        var glyph = document.createElement("span");
+        glyph.className = "glyph";
+        glyph.textContent = isMark ? pt.label : (pt.char === " " ? "sp" : pt.char);
+
+        tok.appendChild(hex);
+        tok.appendChild(glyph);
+        frag.appendChild(tok);
+      });
+      pointsEl.textContent = "";
+      pointsEl.appendChild(frag);
+    }
+
+    resizeTextarea();
+  }
+
+  /* ---------- copy (with 3 layers of fallback) ---------- */
+
+  function legacyCopy(text) {
+    var prevFocus = document.activeElement;
+    var selStart = null, selEnd = null;
+    if (prevFocus === source) { selStart = source.selectionStart; selEnd = source.selectionEnd; }
+
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.setAttribute("aria-hidden", "true");
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;padding:0;border:0;opacity:0;font-size:16px;";
+    document.body.appendChild(ta);
+
+    var ok = false;
+    try {
+      ta.focus({ preventScroll: true });
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      ok = document.execCommand("copy");
+    } catch (e) {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+
+    if (prevFocus && typeof prevFocus.focus === "function") {
+      try { prevFocus.focus({ preventScroll: true }); } catch (e) {}
+      if (selStart !== null) { try { source.setSelectionRange(selStart, selEnd); } catch (e) {} }
+    }
+    return ok;
+  }
+
+  function selectOutputForManualCopy() {
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(outputText);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+  }
+
+  async function copyText(text) {
+    // 1) Modern async clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return "ok";
+      } catch (e) { /* blocked or not allowed: try next */ }
+    }
+    // 2) Legacy execCommand
+    if (legacyCopy(text)) return "ok";
+    // 3) Last resort: highlight the output so the user can press Ctrl/Cmd+C
+    selectOutputForManualCopy();
+    return "manual";
+  }
+
+  var copyTimer = null;
+  var copying = false;
+
+  function setCopyLabel(text) {
+    copyBtn.textContent = text;
+    statusEl.textContent = text;
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(function () {
+      copyBtn.textContent = "copy";
+      statusEl.textContent = "";
+      copyTimer = null;
+    }, 1400);
+  }
+
+  async function handleCopy() {
+    if (copying || !state.output) return;
+    copying = true;
+    var text = state.output;               // snapshot at click time
+    var result = await copyText(text);
+    copying = false;
+    setCopyLabel(result === "ok" ? "copied" : "press ctrl+c");
+  }
+
+  /* ---------- clear ---------- */
+
+  function handleClear() {
+    source.value = "";
+    if (copyTimer) { clearTimeout(copyTimer); copyTimer = null; }
+    copyBtn.textContent = "copy";
+    statusEl.textContent = "";
+    render();
+    source.focus();
+  }
+
+  /* ---------- toggles ---------- */
+
+  function bindToggle(btn, key) {
+    btn.addEventListener("click", function () {
+      state[key] = !state[key];
+      btn.setAttribute("aria-checked", String(state[key]));
+      render();
+    });
+  }
+
+  /* ---------- wire up ---------- */
+
+  source.addEventListener("input", render);
+  clearBtn.addEventListener("click", handleClear);
+  copyBtn.addEventListener("click", handleCopy);
+  bindToggle(toggleRlo, "rlo");
+  bindToggle(toggleZwj, "zwj");
+  window.addEventListener("resize", resizeTextarea);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(resizeTextarea);
+
+  // Browsers can restore old textarea contents on refresh/back; always start empty.
+  source.value = "";
+  render();
+  source.focus();
+})();
+</script>
+</body>
+</html>
