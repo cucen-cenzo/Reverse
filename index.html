@@ -134,6 +134,20 @@
 
   section { display: flex; flex-direction: column; gap: 0.75rem; }
 
+  /* too-long error */
+  .error {
+    margin: 0;
+    padding: 0 0.125rem;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: #ff5252;
+  }
+  .error[hidden] { display: none; }
+  .field.invalid { border-color: #ff5252; }
+  .count.over { color: #ff5252; }
+  #output.stopped { opacity: 0.3; }
+
   .controls {
     margin-top: 1.5rem;
     display: flex;
@@ -296,10 +310,11 @@
       <label class="label" for="source">in</label>
       <span class="count" id="in-count">0 chars</span>
     </div>
-    <div class="field">
+    <div class="field" id="in-field">
       <textarea id="source" class="big" rows="4" dir="ltr" spellcheck="false"
                 placeholder="type…" autocomplete="off" autocapitalize="off"></textarea>
     </div>
+    <p class="error" id="error" role="alert" hidden></p>
   </section>
 
   <div class="controls">
@@ -339,8 +354,16 @@
   "use strict";
 
   var RLO = "\u202e";
+  var PDF = "\u202c";
+  var LRI = "\u2066";
+  var PDI = "\u2069";
   var ZWJ = "\u200d";
-  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "200D": "ZERO WIDTH JOINER" };
+  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "202C": "POP DIRECTIONAL FORMATTING", "2066": "LEFT-TO-RIGHT ISOLATE", "2069": "POP DIRECTIONAL ISOLATE", "200D": "ZERO WIDTH JOINER" };
+
+  // Longest message (in typed characters) that fits on one chat line.
+  // Longer flipped messages wrap in the wrong order, so copying is blocked.
+  // Change this number if your chat fits more or fewer characters.
+  var MAX_CHARS = 45;
 
   var $ = function (id) { return document.getElementById(id); };
   var source = $("source");
@@ -348,14 +371,17 @@
   var outCount = $("out-count");
   var results = $("results");
   var outputText = $("output-text");
+  var outputEl = $("output");
   var pointsEl = $("points");
   var clearBtn = $("clear");
   var copyBtn = $("copy");
   var statusEl = $("status");
+  var errorEl = $("error");
+  var inField = $("in-field");
   var toggleRlo = $("toggle-rlo");
   var toggleZwj = $("toggle-zwj");
 
-  var state = { rlo: true, zwj: true, output: "" };
+  var state = { rlo: true, zwj: true, output: "", blocked: false };
 
   /* ---------- text transforms ---------- */
 
@@ -367,15 +393,20 @@
     return Array.from(value).reverse().join("");
   }
 
-  function markText(value, opts) {
+  // Each word is reversed on its own and wrapped as  LRI RLO ... PDF PDI.
+  // RLO flips the word back for display; PDF and PDI both close it (some apps
+  // drop one of them), and the LRI isolate keeps the flip from leaking into the
+  // next word. The message stays in forward word order, so line wrapping puts
+  // the first words on the first line.
+  function buildOutput(value, opts) {
     if (!value) return "";
-    var out = value;
-    if (opts.zwj) {
-      out = out.replace(/([A-Za-z])(?= )/g, "$1" + ZWJ);
-      out = out.replace(/ /g, ZWJ + " ");
-    }
-    if (opts.rlo) out = RLO + out;
-    return out;
+    return value.split(/(\s+)/).map(function (tok) {
+      if (tok === "" || /^\s+$/.test(tok)) return tok;   // keep spaces/newlines as typed
+      var w = reverseText(tok);
+      if (opts.zwj) w += ZWJ + ZWJ;
+      if (opts.rlo) w = LRI + RLO + w + PDF + PDI;
+      return w;
+    }).join("");
   }
 
   function toCodePoint(ch) {
@@ -384,6 +415,9 @@
     while (hex.length < 4) hex = "0" + hex;
     if (hex === "202E") return { char: ch, hex: hex, label: "RLO", name: NAMES[hex], kind: "rlo" };
     if (hex === "200D") return { char: ch, hex: hex, label: "ZWJ", name: NAMES[hex], kind: "zwj" };
+    if (hex === "202C") return { char: ch, hex: hex, label: "PDF", name: NAMES[hex], kind: "pdf" };
+    if (hex === "2066") return { char: ch, hex: hex, label: "LRI", name: NAMES[hex], kind: "lri" };
+    if (hex === "2069") return { char: ch, hex: hex, label: "PDI", name: NAMES[hex], kind: "pdi" };
     return { char: ch, hex: hex, label: ch, name: "VISIBLE", kind: "visible" };
   }
 
@@ -400,17 +434,33 @@
 
   function render() {
     var value = source.value;
-    var reversed = reverseText(value);
-    var output = markText(reversed, { rlo: state.rlo, zwj: state.zwj });
+    var output = buildOutput(value, { rlo: state.rlo, zwj: state.zwj });
     state.output = output;
 
     var points = Array.from(output).map(toCodePoint);
 
-    inCount.textContent = countLabel(Array.from(value).length, "char");
+    var len = Array.from(value).length;
+    var tooLong = state.rlo && len > MAX_CHARS;
+    state.blocked = tooLong;
+
+    inCount.textContent = tooLong
+      ? len + " / " + MAX_CHARS + " chars"
+      : countLabel(len, "char");
+    inCount.classList.toggle("over", tooLong);
+    inField.classList.toggle("invalid", tooLong);
+    outputEl.classList.toggle("stopped", tooLong);
+    if (tooLong) {
+      errorEl.hidden = false;
+      errorEl.textContent = "ERR_TOO_LONG: " + len + "/" + MAX_CHARS + " chars. Cut " +
+        (len - MAX_CHARS) + " to copy. Longer messages wrap in the wrong order.";
+    } else {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
     outCount.textContent = countLabel(points.length, "point");
 
     clearBtn.disabled = value.length === 0;
-    copyBtn.disabled = output.length === 0;
+    copyBtn.disabled = output.length === 0 || tooLong;
 
     if (!output) {
       results.classList.remove("show");
@@ -518,7 +568,7 @@
   }
 
   async function handleCopy() {
-    if (copying || !state.output) return;
+    if (copying || !state.output || state.blocked) return;
     copying = true;
     var text = state.output;               // snapshot at click time
     var result = await copyText(text);
