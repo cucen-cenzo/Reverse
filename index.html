@@ -405,9 +405,9 @@
   // END on the first line and its START on the second. So text is flipped in
   // GROUPS of words:  LRI RLO <group reversed> [PDF] PDI.  The groups stay in normal
   // order, so wrapping between groups is fine. Only a wrap INSIDE a group would
-  // come out backwards, so the group boundaries are placed exactly where a line
-  // can break, and everything else is packed into big groups. That keeps the
-  // invisible-character cost low (a few per message instead of a few per word).
+  // come out backwards, so groups are made as big as possible without a line break
+  // being able to land inside them. That keeps the invisible-character cost low
+  // (a few per message instead of a few per word).
   //
   // Where a line can break is predicted with estimated glyph widths (Helvetica
   // proportions, per 1000 em), calibrated on what really fit on one TikTok line.
@@ -448,21 +448,34 @@
     return starts;
   }
 
-  // Every word that COULD start a line (for any line width in the window) gets a group boundary.
-  function groupWords(words) {
-    var widths = words.map(textW);
-    var lo = lineStarts(widths, CAP_LO), hi = lineStarts(widths, CAP_HI);
-    var cut = {};
-    for (var k = 0; k < lo.length; k++) {
-      var to = k < hi.length ? hi[k] : words.length - 1;
-      for (var j = lo[k]; j <= to; j++) cut[j] = true;
-    }
-    var groups = [], cur = [];
-    words.forEach(function (w, i) {
-      if (i > 0 && cut[i]) { groups.push(cur); cur = []; }
-      cur.push(w);
+  // Inside a group the chat lays the words out in REVERSED order (the group is
+  // stored flipped), so the words that can spill onto the end of the previous
+  // line are the LAST words of the group, not the first. A group is safe only if,
+  // laid out in that stored order, no line break can land inside it for any line
+  // width in the window.
+  function isSafe(groups) {
+    var lw = [], boundary = {}, idx = 0;
+    groups.forEach(function (g) {
+      boundary[idx] = true;
+      for (var i = g.length - 1; i >= 0; i--) { lw.push(textW(g[i])); idx++; }
     });
-    groups.push(cur);
+    var lo = lineStarts(lw, CAP_LO), hi = lineStarts(lw, CAP_HI);
+    for (var k = 0; k < lo.length; k++) {
+      var to = k < hi.length ? hi[k] : lw.length - 1;
+      for (var j = lo[k]; j <= to; j++) if (!boundary[j]) return false;
+    }
+    return true;
+  }
+
+  // Grow each group word by word for as long as it stays safe.
+  function groupWords(words) {
+    var groups = [[words[0]]];
+    for (var i = 1; i < words.length; i++) {
+      var last = groups[groups.length - 1];
+      var grown = last.concat(words[i]);
+      if (isSafe(groups.slice(0, -1).concat([grown]))) groups[groups.length - 1] = grown;
+      else groups.push([words[i]]);
+    }
     return groups.map(function (g) { return g.join(" "); });
   }
 
