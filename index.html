@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0c0a0a">
-<title>Reverse</title>
+<meta name="theme-color" content="#000000">
+<title>godfather</title>
 <style>
   :root {
     --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, "Segoe UI", sans-serif;
     --display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, "Segoe UI", sans-serif;
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
 
-    --bg: #0c0a0a;
-    --fg: #f29a9a;
-    --muted: #b26868;
-    --subtle: #774545;
-    --wash: #2a1515;
-    --field: #141010;
-    --border: color-mix(in oklab, var(--fg) 22%, transparent);
+    --bg: #000000;
+    --fg: #eceef2;
+    --muted: #a0a8b4;
+    --subtle: #616a77;
+    --wash: rgba(255, 255, 255, 0.09);
+    --field: #0b0d11;
+    --border: rgba(255, 255, 255, 0.14);
   }
 
   *, *::before, *::after { box-sizing: border-box; }
@@ -32,21 +32,28 @@
   body {
     margin: 0;
     min-height: 100svh;
-    background: var(--bg);
+    background: transparent;
     color: var(--fg);
     font-family: var(--sans);
     letter-spacing: -0.01em;
     overflow-x: hidden;
   }
 
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: -1;
-    opacity: 0.05;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  /* faint soft light behind the glass so it has something to bend */
+  .orbs { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .orbs i {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.32;
+    animation: drift 32s ease-in-out infinite alternate;
+  }
+  .orbs i:nth-child(1) { width: 20rem; height: 20rem; top: -5rem; left: -6rem; background: #3c5fb8; }
+  .orbs i:nth-child(2) { width: 18rem; height: 18rem; top: 42%; right: -7rem; background: #5a4bb0; animation-duration: 40s; }
+  .orbs i:nth-child(3) { width: 19rem; height: 19rem; bottom: -7rem; left: 22%; background: #2b8a90; animation-duration: 36s; }
+  @keyframes drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to   { transform: translate3d(2.5rem, 2rem, 0) scale(1.12); }
   }
 
   ::selection { background: var(--fg); color: var(--bg); }
@@ -66,14 +73,36 @@
 
   h1 {
     margin: 0 0 1.75rem;
+    min-height: 1.2em;
+    display: flex;
+    align-items: center;
     font-family: var(--display);
-    font-size: 1.5rem;
-    font-style: italic;
-    font-weight: 400;
-    line-height: 1;
-    letter-spacing: -0.025em;
+    font-size: 1.75rem;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
   }
-  @media (min-width: 640px) { h1 { font-size: 1.875rem; } }
+  @media (min-width: 640px) { h1 { font-size: 2.125rem; } }
+
+  h1 .ch {
+    display: inline-block;
+    animation: letter-in 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  @keyframes letter-in {
+    from { opacity: 0; transform: translateY(0.35em); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: blur(0); }
+  }
+  .caret {
+    display: inline-block;
+    width: 0.07em;
+    height: 0.95em;
+    margin-left: 0.06em;
+    background: var(--fg);
+    animation: blink 900ms steps(1) infinite;
+  }
+  .caret.done { animation: caret-out 600ms ease-out forwards; }
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes caret-out { from { opacity: 1; } to { opacity: 0; } }
 
   .row-head {
     display: flex;
@@ -133,20 +162,6 @@
   #source::placeholder { color: var(--subtle); }
 
   section { display: flex; flex-direction: column; gap: 0.75rem; }
-
-  /* too-long error */
-  .error {
-    margin: 0;
-    padding: 0 0.125rem;
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    line-height: 1.5;
-    color: #ff5252;
-  }
-  .error[hidden] { display: none; }
-  .field.invalid { border-color: #ff5252; }
-  .count.over { color: #ff5252; }
-  #output.stopped { opacity: 0.3; }
 
   .controls {
     margin-top: 1.5rem;
@@ -302,19 +317,19 @@
 </style>
 </head>
 <body>
+<div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
 <main dir="ltr">
-  <h1>reverse</h1>
+  <h1 aria-label="godfather"><span id="title-text" aria-hidden="true"></span><span class="caret" id="title-caret" aria-hidden="true"></span></h1>
 
   <section>
     <div class="row-head">
       <label class="label" for="source">in</label>
       <span class="count" id="in-count">0 chars</span>
     </div>
-    <div class="field" id="in-field">
+    <div class="field">
       <textarea id="source" class="big" rows="4" dir="ltr" spellcheck="false"
                 placeholder="type…" autocomplete="off" autocapitalize="off"></textarea>
     </div>
-    <p class="error" id="error" role="alert" hidden></p>
   </section>
 
   <div class="controls">
@@ -354,16 +369,8 @@
   "use strict";
 
   var RLO = "\u202e";
-  var PDF = "\u202c";
-  var LRI = "\u2066";
-  var PDI = "\u2069";
   var ZWJ = "\u200d";
-  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "202C": "POP DIRECTIONAL FORMATTING", "2066": "LEFT-TO-RIGHT ISOLATE", "2069": "POP DIRECTIONAL ISOLATE", "200D": "ZERO WIDTH JOINER" };
-
-  // Longest message (in typed characters) that fits on one chat line.
-  // Longer flipped messages wrap in the wrong order, so copying is blocked.
-  // Change this number if your chat fits more or fewer characters.
-  var MAX_CHARS = 45;
+  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "200D": "ZERO WIDTH JOINER" };
 
   var $ = function (id) { return document.getElementById(id); };
   var source = $("source");
@@ -371,17 +378,14 @@
   var outCount = $("out-count");
   var results = $("results");
   var outputText = $("output-text");
-  var outputEl = $("output");
   var pointsEl = $("points");
   var clearBtn = $("clear");
   var copyBtn = $("copy");
   var statusEl = $("status");
-  var errorEl = $("error");
-  var inField = $("in-field");
   var toggleRlo = $("toggle-rlo");
   var toggleZwj = $("toggle-zwj");
 
-  var state = { rlo: true, zwj: true, output: "", blocked: false };
+  var state = { rlo: true, zwj: true, output: "" };
 
   /* ---------- text transforms ---------- */
 
@@ -393,20 +397,17 @@
     return Array.from(value).reverse().join("");
   }
 
-  // Each word is reversed on its own and wrapped as  LRI RLO ... PDF PDI.
-  // RLO flips the word back for display; PDF and PDI both close it (some apps
-  // drop one of them), and the LRI isolate keeps the flip from leaking into the
-  // next word. The message stays in forward word order, so line wrapping puts
-  // the first words on the first line.
+  // The whole message is reversed and shown through one RLO, so it reads normally.
+  // ZWJ adds joiners after letters that precede a space, and before every space.
   function buildOutput(value, opts) {
     if (!value) return "";
-    return value.split(/(\s+)/).map(function (tok) {
-      if (tok === "" || /^\s+$/.test(tok)) return tok;   // keep spaces/newlines as typed
-      var w = reverseText(tok);
-      if (opts.zwj) w += ZWJ + ZWJ;
-      if (opts.rlo) w = LRI + RLO + w + PDF + PDI;
-      return w;
-    }).join("");
+    var out = reverseText(value);
+    if (opts.zwj) {
+      out = out.replace(/([A-Za-z])(?= )/g, "$1" + ZWJ);
+      out = out.replace(/ /g, ZWJ + " ");
+    }
+    if (opts.rlo) out = RLO + out;
+    return out;
   }
 
   function toCodePoint(ch) {
@@ -415,9 +416,6 @@
     while (hex.length < 4) hex = "0" + hex;
     if (hex === "202E") return { char: ch, hex: hex, label: "RLO", name: NAMES[hex], kind: "rlo" };
     if (hex === "200D") return { char: ch, hex: hex, label: "ZWJ", name: NAMES[hex], kind: "zwj" };
-    if (hex === "202C") return { char: ch, hex: hex, label: "PDF", name: NAMES[hex], kind: "pdf" };
-    if (hex === "2066") return { char: ch, hex: hex, label: "LRI", name: NAMES[hex], kind: "lri" };
-    if (hex === "2069") return { char: ch, hex: hex, label: "PDI", name: NAMES[hex], kind: "pdi" };
     return { char: ch, hex: hex, label: ch, name: "VISIBLE", kind: "visible" };
   }
 
@@ -439,28 +437,11 @@
 
     var points = Array.from(output).map(toCodePoint);
 
-    var len = Array.from(value).length;
-    var tooLong = state.rlo && len > MAX_CHARS;
-    state.blocked = tooLong;
-
-    inCount.textContent = tooLong
-      ? len + " / " + MAX_CHARS + " chars"
-      : countLabel(len, "char");
-    inCount.classList.toggle("over", tooLong);
-    inField.classList.toggle("invalid", tooLong);
-    outputEl.classList.toggle("stopped", tooLong);
-    if (tooLong) {
-      errorEl.hidden = false;
-      errorEl.textContent = "ERR_TOO_LONG: " + len + "/" + MAX_CHARS + " chars. Cut " +
-        (len - MAX_CHARS) + " to copy. Longer messages wrap in the wrong order.";
-    } else {
-      errorEl.hidden = true;
-      errorEl.textContent = "";
-    }
+    inCount.textContent = countLabel(Array.from(value).length, "char");
     outCount.textContent = countLabel(points.length, "point");
 
     clearBtn.disabled = value.length === 0;
-    copyBtn.disabled = output.length === 0 || tooLong;
+    copyBtn.disabled = output.length === 0;
 
     if (!output) {
       results.classList.remove("show");
@@ -568,7 +549,7 @@
   }
 
   async function handleCopy() {
-    if (copying || !state.output || state.blocked) return;
+    if (copying || !state.output) return;
     copying = true;
     var text = state.output;               // snapshot at click time
     var result = await copyText(text);
@@ -597,6 +578,34 @@
     });
   }
 
+  /* ---------- title: spell it out slowly ---------- */
+
+  function typeTitle() {
+    var word = "godfather";
+    var box = $("title-text");
+    var caret = $("title-caret");
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      box.textContent = word;
+      caret.style.display = "none";
+      return;
+    }
+    var i = 0;
+    function step() {
+      var span = document.createElement("span");
+      span.className = "ch";
+      span.textContent = word.charAt(i);
+      box.appendChild(span);
+      i++;
+      if (i < word.length) {
+        setTimeout(step, 130);          // steady, no gaps between letters
+      } else {
+        setTimeout(function () { caret.classList.add("done"); }, 700);
+      }
+    }
+    setTimeout(step, 250);
+  }
+
   /* ---------- wire up ---------- */
 
   source.addEventListener("input", render);
@@ -610,6 +619,7 @@
   // Browsers can restore old textarea contents on refresh/back; always start empty.
   source.value = "";
   render();
+  typeTitle();
   source.focus();
 })();
 </script>
