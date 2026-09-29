@@ -370,7 +370,10 @@
 
   var RLO = "\u202e";
   var ZWJ = "\u200d";
-  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "200D": "ZERO WIDTH JOINER" };
+  var PDF = "\u202c";
+  var LRI = "\u2066";
+  var PDI = "\u2069";
+  var NAMES = { "202E": "RIGHT-TO-LEFT OVERRIDE", "202C": "POP DIRECTIONAL FORMATTING", "2066": "LEFT-TO-RIGHT ISOLATE", "2069": "POP DIRECTIONAL ISOLATE", "200D": "ZERO WIDTH JOINER" };
 
   var $ = function (id) { return document.getElementById(id); };
   var source = $("source");
@@ -397,17 +400,19 @@
     return Array.from(value).reverse().join("");
   }
 
-  // The whole message is reversed and shown through one RLO, so it reads normally.
-  // ZWJ adds joiners after letters that precede a space, and before every space.
+  // Each word is reversed on its own and wrapped as  LRI RLO ... PDF PDI.
+  // RLO flips the word back for display; PDF and PDI both close it, and the LRI
+  // isolate keeps the flip from leaking into the next word. The message stays in
+  // forward word order, so line wrapping puts the first words on the first line.
   function buildOutput(value, opts) {
     if (!value) return "";
-    var out = reverseText(value);
-    if (opts.zwj) {
-      out = out.replace(/([A-Za-z])(?= )/g, "$1" + ZWJ);
-      out = out.replace(/ /g, ZWJ + " ");
-    }
-    if (opts.rlo) out = RLO + out;
-    return out;
+    return value.split(/(\s+)/).map(function (tok) {
+      if (tok === "" || /^\s+$/.test(tok)) return tok;   // keep spaces/newlines as typed
+      var w = reverseText(tok);
+      if (opts.zwj) w += ZWJ + ZWJ;
+      if (opts.rlo) w = LRI + RLO + w + PDF + PDI;
+      return w;
+    }).join("");
   }
 
   function toCodePoint(ch) {
@@ -416,6 +421,9 @@
     while (hex.length < 4) hex = "0" + hex;
     if (hex === "202E") return { char: ch, hex: hex, label: "RLO", name: NAMES[hex], kind: "rlo" };
     if (hex === "200D") return { char: ch, hex: hex, label: "ZWJ", name: NAMES[hex], kind: "zwj" };
+    if (hex === "202C") return { char: ch, hex: hex, label: "PDF", name: NAMES[hex], kind: "pdf" };
+    if (hex === "2066") return { char: ch, hex: hex, label: "LRI", name: NAMES[hex], kind: "lri" };
+    if (hex === "2069") return { char: ch, hex: hex, label: "PDI", name: NAMES[hex], kind: "pdi" };
     return { char: ch, hex: hex, label: ch, name: "VISIBLE", kind: "visible" };
   }
 
