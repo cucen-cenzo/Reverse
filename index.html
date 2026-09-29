@@ -400,19 +400,106 @@
     return Array.from(value).reverse().join("");
   }
 
-  // Each word is reversed on its own and wrapped as  LRI RLO ... PDF PDI.
-  // RLO flips the word back for display; PDF and PDI both close it, and the LRI
-  // isolate keeps the flip from leaking into the next word. The message stays in
-  // forward word order, so line wrapping puts the first words on the first line.
-  function buildOutput(value, opts) {
-    if (!value) return "";
-    return value.split(/(\s+)/).map(function (tok) {
-      if (tok === "" || /^\s+$/.test(tok)) return tok;   // keep spaces/newlines as typed
-      var w = reverseText(tok);
-      if (opts.zwj) w += ZWJ + ZWJ;
-      if (opts.rlo) w = LRI + RLO + w + PDF + PDI;
+  // ---- how the message is wrapped for chat ----------------------------------
+  // A flipped (RLO) piece of text that gets split across two chat lines shows its
+  // END on the first line and its START on the second. So text is flipped in
+  // GROUPS of words:  LRI RLO <group reversed> [PDF] PDI.  The groups stay in normal
+  // order, so wrapping between groups is fine. Only a wrap INSIDE a group would
+  // come out backwards, so the group boundaries are placed exactly where a line
+  // can break, and everything else is packed into big groups. That keeps the
+  // invisible-character cost low (a few per message instead of a few per word).
+  //
+  // Where a line can break is predicted with estimated glyph widths (Helvetica
+  // proportions, per 1000 em), calibrated on what really fit on one TikTok line.
+  var GW = {
+    a:556,b:556,c:500,d:556,e:556,f:278,g:556,h:556,i:222,j:222,k:500,l:222,m:833,n:556,
+    o:556,p:556,q:556,r:333,s:500,t:278,u:556,v:500,w:722,x:500,y:500,z:500,
+    A:667,B:667,C:722,D:722,E:667,F:611,G:778,H:722,I:278,J:500,K:667,L:556,M:833,N:722,
+    O:778,P:667,Q:778,R:722,S:667,T:611,U:722,V:667,W:944,X:667,Y:667,Z:611,
+    " ":278,"!":278,"\"":355,"#":556,"$":556,"%":889,"&":667,"'":191,"(":333,")":333,"*":389,
+    "+":584,",":278,"-":333,".":278,"/":278,":":278,";":278,"<":584,"=":584,">":584,"?":556,
+    "@":1015,"[":278,"\\":278,"]":278,"_":556,"`":333,"{":334,"|":260,"}":334,"~":584
+  };
+  var SPACE_W = 278;
+
+  function textW(str) {
+    var total = 0;
+    Array.from(str).forEach(function (ch) {
+      if (/\p{Cf}/u.test(ch)) return;                       // invisible format marks: no width
+      if (GW[ch] !== undefined) total += GW[ch];
+      else total += ch.codePointAt(0) > 0x2000 ? 1000 : 556;  // emoji/wide glyphs vs digits & the rest
+    });
+    return total;
+  }
+
+  // One chat line held up to 21955 and never reached 22177 in these units (three
+  // different real messages). A 2.5% margin on both sides covers font differences.
+  var CAP_LO = 21955 * 0.975;
+  var CAP_HI = 22177 * 1.025;
+
+  // Word indexes that start a new line when lines hold at most `cap`.
+  function lineStarts(widths, cap) {
+    var starts = [], used = -1;
+    for (var i = 0; i < widths.length; i++) {
+      if (used < 0) used = widths[i];
+      else if (used + SPACE_W + widths[i] <= cap) used += SPACE_W + widths[i];
+      else { starts.push(i); used = widths[i]; }
+    }
+    return starts;
+  }
+
+  // Every word that COULD start a line (for any line width in the window) gets a group boundary.
+  function groupWords(words) {
+    var widths = words.map(textW);
+    var lo = lineStarts(widths, CAP_LO), hi = lineStarts(widths, CAP_HI);
+    var cut = {};
+    for (var k = 0; k < lo.length; k++) {
+      var to = k < hi.length ? hi[k] : words.length - 1;
+      for (var j = lo[k]; j <= to; j++) cut[j] = true;
+    }
+    var groups = [], cur = [];
+    words.forEach(function (w, i) {
+      if (i > 0 && cut[i]) { groups.push(cur); cur = []; }
+      cur.push(w);
+    });
+    groups.push(cur);
+    return groups.map(function (g) { return g.join(" "); });
+  }
+
+  // Every group costs extra invisible characters, and the chat counts them toward
+  // its limit. So the output is built with as much as fits in POINT_BUDGET:
+  //   full   : LRI RLO text ZWJ ZWJ PDF PDI
+  //   lean 1 : drop PDF (PDI already closes the group)
+  //   lean 2 : one ZWJ instead of two
+  //   lean 3 : no ZWJ
+  var POINT_BUDGET = 100;
+
+  function wrapGroups(groups, opts, tier) {
+    return groups.map(function (text) {
+      if (text === "") return "";
+      var w = reverseText(text);
+      for (var i = 0; i < tier.z; i++) w += ZWJ;
+      if (opts.rlo) w = LRI + RLO + w + (tier.pdf ? PDF : "") + PDI;
       return w;
-    }).join("");
+    }).join(" ");
+  }
+
+  function buildOutput(value, opts) {
+    if (!value) return { text: "", lean: false };
+    var maxZ = opts.zwj ? 2 : 0;
+    var groups = opts.rlo ? groupWords(value.split(" ")) : [value];
+    if (!opts.rlo) return { text: wrapGroups(groups, opts, { pdf: false, z: maxZ }), lean: false };
+
+    var tiers = [{ pdf: true, z: maxZ }, { pdf: false, z: maxZ }];
+    for (var z = maxZ - 1; z >= 0; z--) tiers.push({ pdf: false, z: z });
+
+    var text = "", idx = 0;
+    for (; idx < tiers.length; idx++) {
+      text = wrapGroups(groups, opts, tiers[idx]);
+      if (Array.from(text).length <= POINT_BUDGET) break;
+    }
+    if (idx === tiers.length) idx = tiers.length - 1;      // leanest possible, still over budget
+    return { text: text, lean: idx > 0 };
   }
 
   function toCodePoint(ch) {
@@ -440,13 +527,14 @@
 
   function render() {
     var value = source.value;
-    var output = buildOutput(value, { rlo: state.rlo, zwj: state.zwj });
+    var built = buildOutput(value, { rlo: state.rlo, zwj: state.zwj });
+    var output = built.text;
     state.output = output;
 
     var points = Array.from(output).map(toCodePoint);
 
     inCount.textContent = countLabel(Array.from(value).length, "char");
-    outCount.textContent = countLabel(points.length, "point");
+    outCount.textContent = countLabel(points.length, "point") + (built.lean ? " \u00b7 lean" : "");
 
     clearBtn.disabled = value.length === 0;
     copyBtn.disabled = output.length === 0;
